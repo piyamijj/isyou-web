@@ -29,11 +29,34 @@ import { RemoveSectionDialog } from "../../../../src/components/views/dialogs/Re
 import { DefaultTagID } from "../../../../src/stores/room-list-v3/skip-list/tag";
 import { MetaSpace } from "../../../../src/stores/spaces";
 import { SDKContextClass } from "../../../../src/contexts/SDKContextClass.ts";
+import { tagRoom } from "../../../../src/utils/room/tagRoom.ts";
+import { mkStubRoom } from "../../../test-utils";
+
+jest.mock("../../../../src/utils/room/tagRoom.ts");
 
 describe("section", () => {
     afterEach(() => {
         jest.restoreAllMocks();
+        jest.mocked(tagRoom).mockClear();
     });
+
+    /**
+     * Make the given rooms resolvable through the client, marking those in `taggedRoomIds` as
+     * already belonging to `tag`.
+     * @param tag - The tag of the section the rooms may belong to.
+     * @param roomIds - The ids of the rooms the client knows about.
+     * @param taggedRoomIds - The ids of the rooms that are already in the section.
+     */
+    function setupRooms(tag: string, roomIds: string[], taggedRoomIds: string[] = []): void {
+        const rooms = roomIds.map((roomId) => {
+            const room = mkStubRoom(roomId, roomId);
+            room.tags = taggedRoomIds.includes(roomId) ? { [tag]: {} } : {};
+            return room;
+        });
+        jest.spyOn(SDKContextClass.instance, "client", "get").mockReturnValue({
+            getRoom: (roomId: string) => rooms.find((room) => room.roomId === roomId) ?? null,
+        } as any);
+    }
 
     describe("getCustomSectionData", () => {
         const validTag = "element.io.section.valid";
@@ -200,12 +223,12 @@ describe("section", () => {
         });
 
         it.each([
-            [false, "", undefined],
-            [true, "", undefined],
-            [true, "My Section", expect.stringMatching(/^element\.io\.section\./)],
-        ])("returns %s when shouldCreate=%s and name='%s'", async (shouldCreate, name, expected) => {
+            [undefined, undefined],
+            ["", undefined],
+            ["My Section", expect.stringMatching(/^element\.io\.section\./)],
+        ])("returns %s when the dialog is finished with name='%s'", async (name, expected) => {
             jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([shouldCreate, name]),
+                finished: Promise.resolve([name]),
                 close: jest.fn(),
             } as any);
 
@@ -215,7 +238,7 @@ describe("section", () => {
 
         it("returns the new tag when section is created", async () => {
             jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([true, "My Section"]),
+                finished: Promise.resolve(["My Section"]),
                 close: jest.fn(),
             } as any);
 
@@ -225,12 +248,29 @@ describe("section", () => {
 
         it("opens the CreateSectionDialog", async () => {
             const createDialogSpy = jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([false, ""]),
+                finished: Promise.resolve([undefined]),
                 close: jest.fn(),
             } as any);
 
             await createSection(MetaSpace.Home);
             expect(createDialogSpy).toHaveBeenCalledWith(CreateSectionDialog);
+        });
+
+        it("tags the rooms chosen in the dialog with the new section", async () => {
+            jest.spyOn(Modal, "createDialog").mockReturnValue({
+                finished: Promise.resolve(["My Section", ["!picked:example.org"]]),
+                close: jest.fn(),
+            } as any);
+
+            const room = mkStubRoom("!picked:example.org", "Picked");
+            room.tags = {};
+            jest.spyOn(SDKContextClass.instance, "client", "get").mockReturnValue({
+                getRoom: () => room,
+            } as any);
+
+            const newTag = await createSection(MetaSpace.Home);
+
+            expect(tagRoom).toHaveBeenCalledWith(room, newTag);
         });
 
         it("saves section data and ordered sections at ACCOUNT level when confirmed", async () => {
@@ -242,7 +282,7 @@ describe("section", () => {
                 return null;
             });
             jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([true, "My Section"]),
+                finished: Promise.resolve(["My Section"]),
                 close: jest.fn(),
             } as any);
             const setValueSpy = jest.spyOn(SettingsStore, "setValue").mockResolvedValue(undefined);
@@ -290,21 +330,19 @@ describe("section", () => {
 
         it("opens the CreateSectionDialog with the current section name", async () => {
             const createDialogSpy = jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([false, ""]),
+                finished: Promise.resolve([undefined]),
                 close: jest.fn(),
             } as any);
 
             await editSection(tag);
-            expect(createDialogSpy).toHaveBeenCalledWith(CreateSectionDialog, { sectionToEdit: "Old Name" });
+            expect(createDialogSpy).toHaveBeenCalledWith(CreateSectionDialog, {
+                sectionToEdit: { tag, name: "Old Name", spaceId: MetaSpace.Home },
+            });
         });
 
-        it.each([
-            [false, "New Name"],
-            [true, ""],
-            [true, "Old Name"],
-        ])("does not save when shouldEdit=%s and name='%s'", async (shouldEdit, name) => {
+        it.each([[undefined], [""], ["Old Name"]])("does not save when the name is '%s'", async (name) => {
             jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([shouldEdit, name]),
+                finished: Promise.resolve([name]),
                 close: jest.fn(),
             } as any);
             const setValueSpy = jest.spyOn(SettingsStore, "setValue").mockResolvedValue(undefined);
@@ -315,7 +353,7 @@ describe("section", () => {
 
         it("saves the new name when confirmed with a different name", async () => {
             jest.spyOn(Modal, "createDialog").mockReturnValue({
-                finished: Promise.resolve([true, "New Name"]),
+                finished: Promise.resolve(["New Name"]),
                 close: jest.fn(),
             } as any);
             const setValueSpy = jest.spyOn(SettingsStore, "setValue").mockResolvedValue(undefined);
@@ -328,6 +366,34 @@ describe("section", () => {
                 expect.anything(),
                 expect.objectContaining({ [tag]: expect.objectContaining({ tag, name: "New Name" }) }),
             );
+        });
+
+        it("tags the rooms added to the section and untags the ones removed from it", async () => {
+            setupRooms(tag, ["!added:example.org", "!removed:example.org"], ["!removed:example.org"]);
+            jest.spyOn(Modal, "createDialog").mockReturnValue({
+                finished: Promise.resolve(["New Name", ["!added:example.org"], ["!removed:example.org"]]),
+                close: jest.fn(),
+            } as any);
+
+            await editSection(tag);
+
+            expect(tagRoom).toHaveBeenCalledTimes(2);
+            expect(tagRoom).toHaveBeenCalledWith(expect.objectContaining({ roomId: "!added:example.org" }), tag);
+            expect(tagRoom).toHaveBeenCalledWith(expect.objectContaining({ roomId: "!removed:example.org" }), tag);
+        });
+
+        it("applies the room changes even when the name is unchanged", async () => {
+            setupRooms(tag, ["!added:example.org"]);
+            jest.spyOn(Modal, "createDialog").mockReturnValue({
+                finished: Promise.resolve(["Old Name", ["!added:example.org"], []]),
+                close: jest.fn(),
+            } as any);
+            const setValueSpy = jest.spyOn(SettingsStore, "setValue").mockResolvedValue(undefined);
+
+            await editSection(tag);
+
+            expect(tagRoom).toHaveBeenCalledWith(expect.objectContaining({ roomId: "!added:example.org" }), tag);
+            expect(setValueSpy).not.toHaveBeenCalled();
         });
     });
 
