@@ -99,5 +99,6 @@ export type * from "./core/userStatus.ts";
 export * from "./status/SetStatusView";
 export * from "./status/StatusTextView";
 export * from "./status/UserStatusIconView";
+export * from "./devtools/CustomThemesView";
 // MVVM
 export * from "./core/viewmodel";
