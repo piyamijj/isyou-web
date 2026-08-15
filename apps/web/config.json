@@ -1,0 +1,39 @@
+{
+    "default_server_config": {
+        "m.homeserver": {
+            "base_url": "https://srchu.duckdns.org",
+            "server_name": "srchu.duckdns.org"
+        }
+    },
+    "disable_custom_urls": false,
+    "disable_guests": false,
+    "disable_login_language_selector": false,
+    "disable_3pid_login": false,
+    "force_verification": false,
+    "brand": "İsyou",
+    "branding": {
+        "logo_link_url": "https://isyou.duckdns.org",
+        "auth_header_logo_url": "themes/isyou/img/logos/isyou-logo.png",
+        "welcome_background_url": "themes/element/img/backgrounds/isyou-welcome-bg.jpg"
+    },
+    "default_widget_container_height": 280,
+    "default_country_code": "TR",
+    "show_labs_settings": true,
+    "features": {},
+    "default_federate": true,
+    "default_theme": "light",
+    "room_directory": {
+        "servers": ["srchu.duckdns.org"]
+    },
+    "setting_defaults": {
+        "breadcrumbs": true
+    },
+    "jitsi": {
+        "preferred_domain": "meet.element.io"
+    },
+    "element_call": {
+        "brand": "İsyou Call",
+        "disable": true,
+        "use_exclusively": false
+    }
+}
