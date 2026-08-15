@@ -1,5 +1,5 @@
 {
-    "installCommand": "corepack enable && corepack prepare pnpm@11.21.0 --activate && pnpm install --frozen-lockfile",
+    "installCommand": "pnpm install --no-frozen-lockfile",
     "buildCommand": "pnpm --filter element-web build && cp apps/web/config.json apps/web/webapp/config.json",
     "outputDirectory": "apps/web/webapp",
     "framework": null
